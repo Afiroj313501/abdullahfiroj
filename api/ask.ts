@@ -1,3 +1,6 @@
+import { readFile } from "node:fs/promises";
+import path from "node:path";
+
 type VercelRequest = { method?: string; body?: { question?: unknown } };
 type VercelResponse = { status: (code: number) => { json: (payload: unknown) => unknown } };
 
@@ -21,15 +24,13 @@ function isCompleteAnswer(answer: string) {
 
 async function getProfilePdf() {
   const configuredUrl = process.env.PROFILE_PDF_URL?.trim();
-  const baseUrl = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:5173";
-  const profilePdfUrl = configuredUrl && !configuredUrl.includes("example.com")
-    ? configuredUrl
-    : `${baseUrl}${PROFILE_PDF_PATH}`;
-  const pdfResponse = await fetch(profilePdfUrl);
-  if (!pdfResponse.ok) return undefined;
+  if (configuredUrl && !configuredUrl.includes("example.com")) {
+    const pdfResponse = await fetch(configuredUrl);
+    if (pdfResponse.ok) return Buffer.from(await pdfResponse.arrayBuffer()).toString("base64");
+  }
 
-  const pdf = await pdfResponse.arrayBuffer();
-  return Buffer.from(pdf).toString("base64");
+  const pdf = await readFile(path.join(process.cwd(), "public", PROFILE_PDF_PATH.slice(1)));
+  return pdf.toString("base64");
 }
 
 export default async function handler(request: VercelRequest, response: VercelResponse) {
@@ -55,7 +56,12 @@ export default async function handler(request: VercelRequest, response: VercelRe
   }
 
   try {
-    const profilePdf = await getProfilePdf();
+    let profilePdf: string | undefined;
+    try {
+      profilePdf = await getProfilePdf();
+    } catch {
+      return response.status(500).json({ error: "The profile PDF could not be loaded on Vercel." });
+    }
     const configuredModel = process.env.GEMINI_MODEL?.trim();
     const models = [configuredModel, "gemini-3.6-flash", "gemini-2.5-flash", "gemini-2.5-flash-lite"].filter(
       (model, index, allModels): model is string => Boolean(model) && allModels.indexOf(model) === index,
