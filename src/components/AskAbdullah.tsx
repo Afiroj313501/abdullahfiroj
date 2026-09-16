@@ -5,12 +5,13 @@ import { useState } from "react";
 type Message = { role: "user" | "assistant"; text: string; link?: string };
 
 const QUICK_QUESTIONS = ["What does Abdullah build?", "Tell me about his research.", "Can I see his resume?"];
+const RESUME_LINK = "/Resume.pdf";
 
 export default function AskAbdullah() {
   const [isOpen, setIsOpen] = useState(false);
   const [question, setQuestion] = useState("");
   const [messages, setMessages] = useState<Message[]>([
-    { role: "assistant", text: "Ask me about Abdullah's work, research, skills, or resume." },
+    { role: "assistant", text: "Ask about Abdullah's work" },
   ]);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -24,7 +25,7 @@ export default function AskAbdullah() {
     setIsLoading(true);
 
     if (/\b(resume|cv|curriculum vitae)\b/i.test(trimmedQuestion)) {
-      setMessages((current) => [...current, { role: "assistant", text: "Here is Abdullah's resume.", link: "/resume.html" }]);
+      setMessages((current) => [...current, { role: "assistant", text: "Download Abdullah's resume", link: RESUME_LINK }]);
       setIsLoading(false);
       return;
     }
@@ -37,7 +38,7 @@ export default function AskAbdullah() {
       });
       const data = (await response.json()) as { answer?: string; error?: string };
       if (!response.ok) throw new Error(data.error || "The assistant could not answer right now.");
-      setMessages((current) => [...current, { role: "assistant", text: data.answer || "I could not find an answer." }]);
+      setMessages((current) => [...current, { role: "assistant", text: data.answer || "Information is unavailable." }]);
     } catch (error) {
       setMessages((current) => [...current, {
         role: "assistant",
@@ -71,7 +72,7 @@ export default function AskAbdullah() {
                   className={`ask-message ${message.role === "user" ? "ask-message-user" : "ask-message-assistant"}`}
                 >
                   <span className="ask-message-label">{message.role === "user" ? "You" : "Abdullah AI"}</span>
-                  <p>{message.text} {message.link && <a href={message.link} target="_blank" rel="noreferrer">Open resume ↗</a>}</p>
+                  <p>{message.text} {message.link && <a href={message.link} download="Abdullah-Firoj-Resume.pdf">Download PDF ↗</a>}</p>
                 </motion.div>
               ))}
               {isLoading && <div className="ask-thinking">Thinking<span>...</span></div>}

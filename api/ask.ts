@@ -1,6 +1,8 @@
 type VercelRequest = { method?: string; body?: { question?: unknown } };
 type VercelResponse = { status: (code: number) => { json: (payload: unknown) => unknown } };
 
+const PROFILE_PDF_PATH = "/All_about_Firoz.pdf";
+
 const PROFILE_CONTEXT = `
 You are Abdullah Firoj's portfolio assistant. Answer only from this profile context.
 Abdullah Firoj is a Computer Science and Engineering graduate from United International University with a major in Data Science.
@@ -10,8 +12,18 @@ His research includes Energy-Aware Tool Discovery for Agentic AI with the Model 
 His stack includes Java, Python, JavaScript, TypeScript, React, Node.js, Express, PostgreSQL, MongoDB, MySQL, Prisma, PyTorch, TensorFlow, OpenCV, Gemini, RAG, embeddings, semantic search, vector search, Git, Docker, and Vercel.
 He enjoys football, video games, cooking, gardening, movies and series, and listening to music.
 If the answer is not in this context, say that the information is not listed on the portfolio. Do not invent personal details, contact information, achievements, or links.
-Keep answers concise, friendly, and professional.
+Answer in complete, natural sentences using only information from the attached PDF.
 `;
+
+async function getProfilePdf() {
+  const configuredUrl = process.env.PROFILE_PDF_URL?.trim();
+  const baseUrl = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:5173";
+  const pdfResponse = await fetch(configuredUrl || `${baseUrl}${PROFILE_PDF_PATH}`);
+  if (!pdfResponse.ok) return undefined;
+
+  const pdf = await pdfResponse.arrayBuffer();
+  return Buffer.from(pdf).toString("base64");
+}
 
 export default async function handler(request: VercelRequest, response: VercelResponse) {
   if (request.method !== "POST") {
@@ -25,7 +37,8 @@ export default async function handler(request: VercelRequest, response: VercelRe
 
   if (/\b(resume|cv|curriculum vitae)\b/i.test(question)) {
     return response.status(200).json({
-      answer: "You can view or download Abdullah's resume here: /resume.html",
+      answer: "Download Abdullah's resume",
+      link: "/Resume.pdf",
     });
   }
 
@@ -35,6 +48,7 @@ export default async function handler(request: VercelRequest, response: VercelRe
   }
 
   try {
+    const profilePdf = await getProfilePdf();
     const configuredModel = process.env.GEMINI_MODEL?.trim();
     const models = [configuredModel, "gemini-3.6-flash", "gemini-2.5-flash", "gemini-2.5-flash-lite"].filter(
       (model, index, allModels): model is string => Boolean(model) && allModels.indexOf(model) === index,
@@ -48,7 +62,12 @@ export default async function handler(request: VercelRequest, response: VercelRe
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            contents: [{ parts: [{ text: `${PROFILE_CONTEXT}\n\nQuestion: ${question}` }] }],
+            contents: [{
+              parts: [
+                { text: `${PROFILE_CONTEXT}\n\nUse the attached profile PDF as the primary source for the answer.\nQuestion: ${question}` },
+                ...(profilePdf ? [{ inlineData: { mimeType: "application/pdf", data: profilePdf } }] : []),
+              ],
+            }],
             generationConfig: { temperature: 0.35, maxOutputTokens: 300 },
           }),
         },
@@ -59,7 +78,7 @@ export default async function handler(request: VercelRequest, response: VercelRe
       };
       const answer = result.candidates?.[0]?.content?.parts?.[0]?.text;
 
-      if (geminiResponse.ok && answer) return response.status(200).json({ answer });
+      if (geminiResponse.ok && answer) return response.status(200).json({ answer: answer.trim() });
     }
 
     if (lastStatus === 404) {
