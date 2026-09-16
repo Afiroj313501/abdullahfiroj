@@ -12,13 +12,20 @@ His research includes Energy-Aware Tool Discovery for Agentic AI with the Model 
 His stack includes Java, Python, JavaScript, TypeScript, React, Node.js, Express, PostgreSQL, MongoDB, MySQL, Prisma, PyTorch, TensorFlow, OpenCV, Gemini, RAG, embeddings, semantic search, vector search, Git, Docker, and Vercel.
 He enjoys football, video games, cooking, gardening, movies and series, and listening to music.
 If the answer is not in this context, say that the information is not listed on the portfolio. Do not invent personal details, contact information, achievements, or links.
-Answer in complete, natural sentences using only information from the attached PDF.
+Answer in complete, natural sentences using only information from the attached PDF. Answer the question directly, and never return an unfinished phrase or sentence fragment. If the PDF does not contain the answer, say: "That information is not listed in the profile."
 `;
+
+function isCompleteAnswer(answer: string) {
+  return /[.!?)]$/.test(answer.trim());
+}
 
 async function getProfilePdf() {
   const configuredUrl = process.env.PROFILE_PDF_URL?.trim();
   const baseUrl = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : "http://localhost:5173";
-  const pdfResponse = await fetch(configuredUrl || `${baseUrl}${PROFILE_PDF_PATH}`);
+  const profilePdfUrl = configuredUrl && !configuredUrl.includes("example.com")
+    ? configuredUrl
+    : `${baseUrl}${PROFILE_PDF_PATH}`;
+  const pdfResponse = await fetch(profilePdfUrl);
   if (!pdfResponse.ok) return undefined;
 
   const pdf = await pdfResponse.arrayBuffer();
@@ -64,11 +71,11 @@ export default async function handler(request: VercelRequest, response: VercelRe
           body: JSON.stringify({
             contents: [{
               parts: [
-                { text: `${PROFILE_CONTEXT}\n\nUse the attached profile PDF as the primary source for the answer.\nQuestion: ${question}` },
+                { text: `${PROFILE_CONTEXT}\n\nUse the attached profile PDF as the primary source for the answer. Write one or two complete sentences and finish with punctuation.\nQuestion: ${question}` },
                 ...(profilePdf ? [{ inlineData: { mimeType: "application/pdf", data: profilePdf } }] : []),
               ],
             }],
-            generationConfig: { temperature: 0.35, maxOutputTokens: 300 },
+            generationConfig: { temperature: 0.2, maxOutputTokens: 500 },
           }),
         },
       );
@@ -78,7 +85,7 @@ export default async function handler(request: VercelRequest, response: VercelRe
       };
       const answer = result.candidates?.[0]?.content?.parts?.[0]?.text;
 
-      if (geminiResponse.ok && answer) return response.status(200).json({ answer: answer.trim() });
+      if (geminiResponse.ok && answer && isCompleteAnswer(answer)) return response.status(200).json({ answer: answer.trim() });
     }
 
     if (lastStatus === 404) {
