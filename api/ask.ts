@@ -1,5 +1,12 @@
+// Vercel provides these Node APIs at runtime, but its separate API type check
+// does not always load the workspace Node declarations.
+// @ts-ignore Vercel runtime module
 import { readFile } from "node:fs/promises";
+// @ts-ignore Vercel runtime module
 import path from "node:path";
+
+declare const process: { env: Record<string, string | undefined>; cwd: () => string };
+declare const Buffer: { from: (value: ArrayBuffer | string) => { toString: (encoding?: string) => string } };
 
 type VercelRequest = { method?: string; body?: { question?: unknown } };
 type VercelResponse = { status: (code: number) => { json: (payload: unknown) => unknown } };
